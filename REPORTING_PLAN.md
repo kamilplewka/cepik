@@ -126,6 +126,6 @@ Aggregated outputs per run.
 - CLI helpers (all in `/app/bin/console`):
   - `app:reports:create-run <code> <payload>` – registers a new entry in `reports`/`report_runs`.
   - `app:reports:generate-queries <runId>` – ekspanduje run do rekordów `report_queries` i pokazuje pasek postępu z bieżącym regionem/oknem.
-  - `app:reports:process-queue [--limit=N]` – konsumuje zapytania, pokazuje kolorowe statusy i pasek postępu, zapisuje wyniki/błędy.
+  - `app:reports:process-queue [--limit=N] [--ignore-attempts]` – konsumuje zapytania, pokazuje kolorowe statusy i pasek postępu, zapisuje wyniki/błędy, opcjonalnie ignoruje limit prób.
   - `app:reports:aggregate-run <runId>` – agreguje udane zapytania z wizualnym podglądem postępu.
 - Services under `App\Service\Report\*` implement the workflow for injection into other entry points (e.g. HTTP controllers, workers).

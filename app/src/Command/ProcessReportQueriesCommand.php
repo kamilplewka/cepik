@@ -20,7 +20,9 @@ class ProcessReportQueriesCommand extends Command
 
     protected function configure(): void
     {
-        $this->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Maximum number of queries to process in one batch', 10);
+        $this
+            ->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Maximum number of queries to process in one batch', 10)
+            ->addOption('ignore-attempts', null, InputOption::VALUE_NONE, 'Do not stop after reaching max attempts (keep retrying)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -28,62 +30,99 @@ class ProcessReportQueriesCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $limit = (int) $input->getOption('limit');
 
-        $progressBar = null;
-        $processed = $this->processor->processBatch($limit, function (int $processedCount, ?\App\Entity\ReportQuery $query, int $total) use (&$progressBar, $io) {
-            if ($progressBar === null) {
-                $progressBar = $io->createProgressBar($total);
-                $progressBar->setFormat(' %current%/%max% [%bar%] %percent:3s%% %message%');
-                $progressBar->setMessage(sprintf('Queued: %d', $total));
-                $progressBar->start();
-            }
+        $ignoreAttempts = (bool) $input->getOption('ignore-attempts');
+        $retryableHalts = [
+            'Idle timeout reached while querying CEPiK.',
+            'CEPiK API limit reached (API-ERR-100011).',
+        ];
 
-            if ($processedCount === 0) {
-                return;
-            }
+        $totalProcessed = 0;
 
-            $status = $query->getStatus();
-            $color = match ($status) {
-                \App\Enum\ReportQueryStatus::Succeeded => 'green',
-                \App\Enum\ReportQueryStatus::Retrying => 'yellow',
-                \App\Enum\ReportQueryStatus::Failed => 'red',
-                default => 'cyan',
-            };
+        while (true) {
+            $progressBar = null;
 
-            $request = $query->getRequestParams();
-            $meta = $request['meta'] ?? [];
-            $queryParams = $request['query'] ?? $request;
-            $label = sprintf(
-                '[%d/%d] Region %s | Year %s | Attempts %d | Status %s',
-                $processedCount,
-                $total,
-                $meta['wojewodztwo'] ?? ($queryParams['wojewodztwo'] ?? 'n/a'),
-                $meta['year'] ?? ($queryParams['filter[rok-produkcji]'] ?? 'n/a'),
-                $query->getAttempts(),
-                strtoupper($status->value),
+            $batchResult = $this->processor->processBatch(
+                $limit,
+                $ignoreAttempts,
+                function (int $processedCount, ?\App\Entity\ReportQuery $query, int $total) use (&$progressBar, $io) {
+                    if ($progressBar === null) {
+                        $progressBar = $io->createProgressBar($total);
+                        $progressBar->setFormat(' %current%/%max% [%bar%] %percent:3s%% %message%');
+                        $progressBar->setMessage(sprintf('Queued: %d', $total));
+                        $progressBar->start();
+                    }
+
+                    if ($processedCount === 0 || $query === null) {
+                        return;
+                    }
+
+                    $status = $query->getStatus();
+                    $color = match ($status) {
+                        \App\Enum\ReportQueryStatus::Succeeded => 'green',
+                        \App\Enum\ReportQueryStatus::Retrying => 'yellow',
+                        \App\Enum\ReportQueryStatus::Failed => 'red',
+                        default => 'cyan',
+                    };
+
+                    $request = $query->getRequestParams();
+                    $meta = $request['meta'] ?? [];
+                    $queryParams = $request['query'] ?? $request;
+                    $label = sprintf(
+                        '[%d/%d] Region %s | Year %s | Attempts %d | Status %s',
+                        $processedCount,
+                        $total,
+                        $meta['wojewodztwo'] ?? ($queryParams['wojewodztwo'] ?? 'n/a'),
+                        $meta['year'] ?? ($queryParams['filter[rok-produkcji]'] ?? 'n/a'),
+                        $query->getAttempts(),
+                        strtoupper($status->value),
+                    );
+
+                    $progressBar->setMessage(sprintf('Last: %s', strtoupper($status->value)));
+                    $progressBar->advance();
+
+                    $progressBar->clear();
+                    $io->writeln(sprintf('<fg=%s>%s</>', $color, $label));
+                    $progressBar->display();
+                }
             );
 
-            $progressBar->setMessage(sprintf('Last: %s', strtoupper($status->value)));
-            $progressBar->advance();
+            if ($batchResult['processed'] === 0) {
+                if ($totalProcessed === 0) {
+                    $io->warning('No pending queries were found.');
+                } else {
+                    $io->success(sprintf('Processed %d queued queries.', $totalProcessed));
+                }
 
-            $progressBar->clear();
-            $io->writeln(sprintf('<fg=%s>%s</>', $color, $label));
-            $progressBar->display();
-        });
+                return Command::SUCCESS;
+            }
 
-        if ($progressBar) {
-            $progressBar->setMessage('Batch complete');
-            $progressBar->finish();
-            $io->newLine(2);
+            $totalProcessed += $batchResult['processed'];
+
+            if ($progressBar) {
+                $progressBar->setMessage($batchResult['halted'] ? 'Processing halted' : 'Batch complete');
+                $progressBar->finish();
+                $io->newLine(2);
+            }
+
+            if ($batchResult['halted']) {
+                $reason = $batchResult['halt_reason'] ?? 'unknown reason';
+
+                if (\in_array($reason, $retryableHalts, true)) {
+                    $io->warning(sprintf('%s Waiting 5 seconds before retrying…', $reason));
+                    sleep(5);
+                    continue;
+                }
+
+                $io->error(sprintf('Processing halted: %s', $reason));
+
+                return Command::FAILURE;
+            }
+
+            if ($batchResult['processed'] < $limit) {
+                $io->success(sprintf('Processed %d queued queries.', $totalProcessed));
+
+                return Command::SUCCESS;
+            }
         }
-
-        if ($processed === 0) {
-            $io->warning('No pending queries were found.');
-
-            return Command::SUCCESS;
-        }
-
-        $io->success(sprintf('Processed %d queued queries.', $processed));
-
-        return Command::SUCCESS;
     }
 }
