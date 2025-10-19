@@ -1,0 +1,6 @@
+.git
+.gitignore
+.DS_Store
+app/var
+app/vendor
+node_modules
