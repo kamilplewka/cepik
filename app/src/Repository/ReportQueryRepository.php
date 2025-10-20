@@ -26,7 +26,8 @@ class ReportQueryRepository extends ServiceEntityRepository
                 ReportQueryStatus::Queued,
                 ReportQueryStatus::Retrying,
             ])
-            ->orderBy('query.lastAttemptAt', 'ASC')
+            ->orderBy('query.sequence', 'ASC')
+            ->addOrderBy('query.lastAttemptAt', 'ASC')
             ->addOrderBy('query.id', 'ASC')
             ->setMaxResults($limit)
             ->getQuery()

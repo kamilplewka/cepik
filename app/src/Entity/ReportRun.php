@@ -115,6 +115,11 @@ class ReportRun
     {
         $this->status = $status;
 
+        if ($status === ReportRunStatus::Completed) {
+            $this->statusMessage = null;
+            $this->errorPayload = null;
+        }
+
         return $this;
     }
 

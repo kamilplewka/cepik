@@ -45,7 +45,7 @@ class ReportResultAggregator
 
         $result->setStatus(ReportResultStatus::Calculating);
 
-        $aggregation = $this->buildAggregation($run);
+        $aggregation = $this->buildAggregation($run, $progressCallback);
 
         $result->setResultPayload($aggregation);
         $result->setStatus(ReportResultStatus::Ready);
@@ -59,9 +59,11 @@ class ReportResultAggregator
     }
 
     /**
+     * @param callable(int, ?ReportQuery, int):void|null $progressCallback
+     *
      * @return array<string, mixed>
      */
-    private function buildAggregation(ReportRun $run): array
+    private function buildAggregation(ReportRun $run, ?callable $progressCallback = null): array
     {
         $total = 0;
         $byRegion = [];
