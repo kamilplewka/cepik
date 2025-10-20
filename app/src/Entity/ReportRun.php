@@ -61,6 +61,12 @@ class ReportRun
     #[ORM\OneToMany(mappedBy: 'reportRun', targetEntity: ReportResult::class, cascade: ['persist'], orphanRemoval: true)]
     private Collection $results;
 
+    /**
+     * @var Collection<int, ReportVehicle>
+     */
+    #[ORM\OneToMany(mappedBy: 'reportRun', targetEntity: ReportVehicle::class, cascade: ['persist'], orphanRemoval: true)]
+    private Collection $vehicles;
+
     public function __construct(array $inputPayload)
     {
         $this->inputPayload = $inputPayload;
@@ -69,6 +75,7 @@ class ReportRun
         $this->updatedAt = new \DateTimeImmutable();
         $this->queries = new ArrayCollection();
         $this->results = new ArrayCollection();
+        $this->vehicles = new ArrayCollection();
     }
 
     #[ORM\PreUpdate]
@@ -245,6 +252,35 @@ class ReportRun
         if ($this->results->removeElement($result)) {
             if ($result->getReportRun() === $this) {
                 $result->setReportRun(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, ReportVehicle>
+     */
+    public function getVehicles(): Collection
+    {
+        return $this->vehicles;
+    }
+
+    public function addVehicle(ReportVehicle $vehicle): self
+    {
+        if (!$this->vehicles->contains($vehicle)) {
+            $this->vehicles->add($vehicle);
+            $vehicle->setReportRun($this);
+        }
+
+        return $this;
+    }
+
+    public function removeVehicle(ReportVehicle $vehicle): self
+    {
+        if ($this->vehicles->removeElement($vehicle)) {
+            if ($vehicle->getReportRun() === $this) {
+                $vehicle->setReportRun(null);
             }
         }
 

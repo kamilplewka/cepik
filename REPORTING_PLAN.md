@@ -128,4 +128,6 @@ Aggregated outputs per run.
   - `app:reports:generate-queries <runId>` – ekspanduje run do rekordów `report_queries` i pokazuje pasek postępu z bieżącym regionem/oknem.
   - `app:reports:process-queue [--limit=N] [--ignore-attempts]` – konsumuje zapytania, pokazuje kolorowe statusy i pasek postępu, zapisuje wyniki/błędy, opcjonalnie ignoruje limit prób.
   - `app:reports:aggregate-run <runId>` – agreguje udane zapytania z wizualnym podglądem postępu.
+  - `app:reports:vehicles:queue <runId>` – ekstrahuje identyfikatory pojazdów z wyników zapytań danego runu i dodaje je do kolejki `report_vehicles`.
+  - `app:reports:vehicles:process-queue [--limit=N] [--ignore-attempts]` – pobiera dane pojedynczych pojazdów z CEPiK, przetwarza kolejkę z opóźnieniem 5 s dla zadań do ponowienia i respektuje limity API.
 - Services under `App\Service\Report\*` implement the workflow for injection into other entry points (e.g. HTTP controllers, workers).
