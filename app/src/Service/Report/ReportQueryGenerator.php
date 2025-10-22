@@ -53,16 +53,16 @@ class ReportQueryGenerator
         $sequence = 1;
         $created = 0;
 
-        foreach ($regions as $region) {
-            $regionCode = (string) $region;
+        foreach ($dateWindows as $window) {
+            if (!\is_array($window) || !isset($window['from'])) {
+                throw new InvalidArgumentException('Each date window must define at least a "from" key.');
+            }
 
             foreach ($years as $year) {
                 $yearValue = (string) $year;
 
-                foreach ($dateWindows as $window) {
-                    if (!\is_array($window) || !isset($window['from'])) {
-                        throw new InvalidArgumentException('Each date window must define at least a "from" key.');
-                    }
+                foreach ($regions as $region) {
+                    $regionCode = (string) $region;
 
                     $queryParams = $this->buildQueryParams($regionCode, $yearValue, $window, $filters, $queryOptions);
 
