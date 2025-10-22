@@ -4,6 +4,7 @@ namespace App\Service\Report;
 
 use App\Entity\ApiErrorLog;
 use App\Entity\ReportQuery;
+use App\Entity\ReportRun;
 use App\Enum\ReportQueryStatus;
 use App\Enum\ReportRunStatus;
 use App\Exception\CepikClientException;
@@ -122,6 +123,12 @@ class ReportQueryProcessor
             $query->setErrorPayload(null);
             $query->setStatus(ReportQueryStatus::Succeeded);
 
+            $total = $this->extractTotalFromMeta($meta);
+
+            if ($total !== null) {
+                $this->schedulePaginationQueries($query, $total);
+            }
+
             return [
                 'halted' => false,
                 'halt_reason' => null,
@@ -217,6 +224,138 @@ class ReportQueryProcessor
                     return 'CEPiK API limit reached (API-ERR-100011).';
                 }
             }
+        }
+
+        return null;
+    }
+
+    private function schedulePaginationQueries(ReportQuery $query, int $total): void
+    {
+        $requestPayload = $query->getRequestParams();
+        $queryParams = $requestPayload['query'] ?? $requestPayload;
+
+        $limit = isset($queryParams['limit']) ? (int) $queryParams['limit'] : null;
+        $limit = $limit !== null && $limit > 0 ? $limit : null;
+
+        if ($limit === null) {
+            return;
+        }
+
+        $currentPage = isset($queryParams['page']) ? (int) $queryParams['page'] : 1;
+        $totalPages = (int) ceil($total / $limit);
+
+        if ($totalPages <= $currentPage) {
+            return;
+        }
+
+        $run = $query->getReportRun();
+
+        $existingPages = $this->collectExistingPages($run, $queryParams);
+
+        $nextSequence = $this->findNextSequence($run);
+
+        for ($page = $currentPage + 1; $page <= $totalPages; ++$page) {
+            if (isset($existingPages[$page])) {
+                continue;
+            }
+
+            $newQueryParams = $queryParams;
+            $newQueryParams['page'] = $page;
+
+            if (isset($requestPayload['query'])) {
+                $newRequestPayload = $requestPayload;
+                $newRequestPayload['query'] = $newQueryParams;
+            } else {
+                $newRequestPayload = $newQueryParams;
+            }
+
+            $meta = $newRequestPayload['meta'] ?? [];
+            $meta['page'] = $page;
+            $newRequestPayload['meta'] = $meta;
+
+            $newQuery = new ReportQuery($nextSequence++, $newRequestPayload);
+            $newQuery->setStatus(ReportQueryStatus::Pending);
+
+            $run->addQuery($newQuery);
+            $this->entityManager->persist($newQuery);
+        }
+    }
+
+    /**
+     * @return array<int, true>
+     */
+    private function collectExistingPages(ReportRun $run, array $queryParams): array
+    {
+        $signature = $this->buildQuerySignature($queryParams);
+        $pages = [];
+
+        foreach ($run->getQueries() as $existingQuery) {
+            $existingPayload = $existingQuery->getRequestParams();
+            $existingParams = $existingPayload['query'] ?? $existingPayload;
+
+            if ($this->buildQuerySignature($existingParams) !== $signature) {
+                continue;
+            }
+
+            $page = isset($existingParams['page']) ? (int) $existingParams['page'] : 1;
+            $pages[$page] = true;
+        }
+
+        return $pages;
+    }
+
+    private function buildQuerySignature(array $queryParams): string
+    {
+        $normalized = $this->normalizeParams($queryParams);
+        unset($normalized['page']);
+
+        return md5((string) json_encode($normalized));
+    }
+
+    private function findNextSequence(ReportRun $run): int
+    {
+        $max = 0;
+
+        foreach ($run->getQueries() as $existing) {
+            $max = max($max, $existing->getSequence());
+        }
+
+        return $max + 1;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     *
+     * @return array<string, mixed>
+     */
+    private function normalizeParams(array $params): array
+    {
+        ksort($params);
+
+        foreach ($params as $key => $value) {
+            if (\is_array($value)) {
+                $params[$key] = $this->normalizeParams($value);
+            }
+        }
+
+        return $params;
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function extractTotalFromMeta(array $meta): ?int
+    {
+        foreach (['total', 'total-count', 'totalCount'] as $key) {
+            if (isset($meta[$key]) && is_numeric($meta[$key])) {
+                return (int) $meta[$key];
+            }
+        }
+
+        $pagination = $meta['pagination'] ?? null;
+
+        if (\is_array($pagination) && isset($pagination['total']) && is_numeric($pagination['total'])) {
+            return (int) $pagination['total'];
         }
 
         return null;

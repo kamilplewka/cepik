@@ -72,6 +72,7 @@ class ReportQueryGenerator
                             'wojewodztwo' => $regionCode,
                             'year' => $yearValue,
                             'date_window' => $window,
+                            'page' => $queryParams['page'] ?? 1,
                         ],
                     ];
 
