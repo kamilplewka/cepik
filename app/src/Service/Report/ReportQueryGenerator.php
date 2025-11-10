@@ -58,11 +58,11 @@ class ReportQueryGenerator
                 throw new InvalidArgumentException('Each date window must define at least a "from" key.');
             }
 
-            foreach ($years as $year) {
-                $yearValue = (string) $year;
+            foreach ($regions as $region) {
+                $regionCode = (string) $region;
 
-                foreach ($regions as $region) {
-                    $regionCode = (string) $region;
+                foreach ($years as $year) {
+                    $yearValue = (string) $year;
 
                     $queryParams = $this->buildQueryParams($regionCode, $yearValue, $window, $filters, $queryOptions);
 
