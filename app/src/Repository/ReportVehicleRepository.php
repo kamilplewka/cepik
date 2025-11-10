@@ -48,4 +48,19 @@ class ReportVehicleRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult() !== null;
     }
+
+    /**
+     * @return ReportVehicle[]
+     */
+    public function findSucceededByRun(ReportRun $run): array
+    {
+        return $this->createQueryBuilder('vehicle')
+            ->andWhere('vehicle.reportRun = :run')
+            ->andWhere('vehicle.status = :status')
+            ->setParameter('run', $run)
+            ->setParameter('status', ReportVehicleStatus::Succeeded)
+            ->orderBy('vehicle.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }
