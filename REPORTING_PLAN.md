@@ -1,133 +1,151 @@
-# CEPiK Reporting Plan
+# Plan raportowania CEPiK
 
 - Endpoint: `/pojazdy`
-- Target: Active Toyota Celica vehicles produced in 1990-1993
+- Cel przykładowego raportu: aktywne pojazdy Toyota Celica z lat 1990-1993
 
-## Filters per Request
+## Filtry dla pojedynczego zapytania
 
 - `filter[marka]=TOYOTA`
 - `filter[model]=CELICA`
-- `filter[rok-produkcji]` -> four values: 1990, 1991, 1992, 1993
+- `filter[rok-produkcji]` -> cztery wartości: 1990, 1991, 1992, 1993
 - `tylko-zarejestrowane=true`
 
-## Required Parameters
+## Wymagane parametry
 
-- `wojewodztwo` (16 TERYT codes)
-- `data-od` & `data-do` for first registration (default `typ-daty=1`)
-  - Max range: 2 years per query
+- `wojewodztwo` (16 kodów TERYT)
+- `data-od` i `data-do` dla daty pierwszej rejestracji
+- domyślnie `typ-daty=1`
+- maksymalny zakres jednego zapytania: 2 lata
 
-## Query Strategy
+## Strategia budowania zapytań
 
-- Cover registration windows starting 1990-01-01 up to present in 2-year slices (1990-1991, 1992-1993, …, 2024)
-- 18 date windows × 4 model years × 16 regions = 1152 API calls
-- Each response’s `meta.count` provides counts to aggregate
+- Pokrycie okien dat od `1990-01-01` do dziś w przedziałach dwuletnich.
+- Dla przykładu: `1990-1991`, `1992-1993`, ..., aż do bieżącego okresu.
+- 18 okien dat x 4 lata produkcji x 16 województw = 1152 wywołania API.
+- Pole `meta.count` z każdej odpowiedzi służy do końcowej agregacji.
 
-## Database Schema Draft
+## Szkic schematu bazy danych
 
 ### `reports`
 
-| Column | Type | Notes |
+| Kolumna | Typ | Opis |
 | --- | --- | --- |
-| `id` | UUID/PK | |
-| `code` | string | Unique short name (e.g. `toyota-celica-active`) |
-| `name` | string | Human readable title |
-| `description` | text | How the report is defined |
-| `config_schema` | jsonb | JSON schema describing expected input payload |
-| `created_at` | datetime | |
-| `updated_at` | datetime | |
+| `id` | UUID/PK | identyfikator raportu |
+| `code` | string | unikalny krótki kod, np. `toyota-celica-active` |
+| `name` | string | nazwa czytelna dla użytkownika |
+| `description` | text | opis definicji raportu |
+| `config_schema` | jsonb | schemat oczekiwanego payloadu wejściowego |
+| `created_at` | datetime | data utworzenia |
+| `updated_at` | datetime | data modyfikacji |
 
 ### `report_runs`
 
-Stores each instance of input parameters to process.
+Przechowuje pojedyncze uruchomienia raportu z konkretnym zestawem parametrów.
 
-| Column | Type | Notes |
+| Kolumna | Typ | Opis |
 | --- | --- | --- |
-| `id` | UUID/PK | |
-| `report_id` | FK → `reports.id` | |
-| `input_payload` | jsonb | Full set of filters supplied by the user |
+| `id` | UUID/PK | identyfikator uruchomienia |
+| `report_id` | FK -> `reports.id` | powiązany raport |
+| `input_payload` | jsonb | pełen zestaw filtrów od użytkownika |
 | `status` | string | `pending`, `building_queries`, `queued`, `fetching`, `aggregating`, `completed`, `failed` |
-| `status_message` | text | Optional context for the current status |
-| `queued_at` | datetime | When the run became ready for fetching |
-| `started_at` | datetime | First worker pickup |
-| `finished_at` | datetime | Finalization timestamp |
-| `error_payload` | jsonb | Last fatal error (if any) |
-| `created_at` | datetime | |
+| `status_message` | text | dodatkowy opis bieżącego etapu |
+| `queued_at` | datetime | moment gotowości do pobierania danych |
+| `started_at` | datetime | pierwsze podjęcie przez worker |
+| `finished_at` | datetime | moment zakończenia |
+| `error_payload` | jsonb | ostatni błąd krytyczny |
+| `created_at` | datetime | data utworzenia |
 
 ### `report_queries`
 
-Generated list of API calls for a run.
+Lista zapytań API wygenerowanych dla danego uruchomienia raportu.
 
-| Column | Type | Notes |
+| Kolumna | Typ | Opis |
 | --- | --- | --- |
-| `id` | UUID/PK | |
-| `report_run_id` | FK → `report_runs.id` | |
-| `sequence` | integer | Deterministic ordering (e.g. województwo × rok × okno) |
-| `request_params` | jsonb | Canonical query parameters (województwo, filters, data-od/data-do, limit, page, etc.) |
+| `id` | UUID/PK | identyfikator zapytania |
+| `report_run_id` | FK -> `report_runs.id` | powiązane uruchomienie |
+| `sequence` | integer | deterministyczna kolejność wykonania |
+| `request_params` | jsonb | kanoniczny zestaw parametrów żądania |
 | `status` | string | `pending`, `queued`, `in_progress`, `succeeded`, `failed`, `retrying`, `skipped` |
-| `attempts` | integer | Number of tries so far |
-| `last_attempt_at` | datetime | |
-| `response_payload` | jsonb | Raw JSON (meta + data) when successful |
-| `aggregated_count` | integer | Convenience copy of `meta.count` |
-| `error_payload` | jsonb | Last error returned by the API |
-| `created_at` | datetime | |
-| `updated_at` | datetime | |
+| `attempts` | integer | liczba wykonanych prób |
+| `last_attempt_at` | datetime | czas ostatniej próby |
+| `response_payload` | jsonb | surowa odpowiedź JSON przy sukcesie |
+| `aggregated_count` | integer | kopia `meta.count` dla wygody |
+| `error_payload` | jsonb | ostatni zapisany błąd |
+| `created_at` | datetime | data utworzenia |
+| `updated_at` | datetime | data modyfikacji |
 
 ### `report_results`
 
-Aggregated outputs per run.
+Końcowe wyniki zagregowane dla danego uruchomienia raportu.
 
-| Column | Type | Notes |
+| Kolumna | Typ | Opis |
 | --- | --- | --- |
-| `id` | UUID/PK | |
-| `report_run_id` | FK → `report_runs.id` | |
+| `id` | UUID/PK | identyfikator wyniku |
+| `report_run_id` | FK -> `report_runs.id` | powiązane uruchomienie |
 | `status` | string | `pending`, `calculating`, `ready`, `failed` |
-| `result_payload` | jsonb | Final metrics (counts, breakdowns) |
-| `created_at` | datetime | |
-| `updated_at` | datetime | |
+| `result_payload` | jsonb | finalne metryki i podsumowania |
+| `created_at` | datetime | data utworzenia |
+| `updated_at` | datetime | data modyfikacji |
 
 ### `api_error_logs`
 
-| Column | Type | Notes |
+| Kolumna | Typ | Opis |
 | --- | --- | --- |
-| `id` | UUID/PK | |
-| `report_run_id` | FK nullable | Link to run if known |
-| `report_query_id` | FK nullable | Link to query if known |
-| `endpoint` | string | e.g. `/pojazdy` |
-| `request_params` | jsonb | Parameters sent |
-| `response_status` | integer | HTTP code |
-| `error_body` | jsonb | Returned payload/error message |
-| `error_class` | string | Transport vs validation etc. |
-| `created_at` | datetime | |
+| `id` | UUID/PK | identyfikator wpisu |
+| `report_run_id` | FK nullable | powiązanie z uruchomieniem raportu |
+| `report_query_id` | FK nullable | powiązanie z zapytaniem |
+| `endpoint` | string | np. `/pojazdy` |
+| `request_params` | jsonb | parametry wysłane do API |
+| `response_status` | integer | kod HTTP |
+| `error_body` | jsonb | treść błędu lub odpowiedzi |
+| `error_class` | string | rodzaj błędu: transport, walidacja itp. |
+| `created_at` | datetime | data utworzenia |
 
-## Processing Workflow (High Level)
+## Przepływ przetwarzania
 
-1. **Input capture** – user/API posts filters; new `report_run` created with `status=pending`.
-2. **Query generation** – background job builds full parameter grid, persists rows in `report_queries`, updates run to `queued`.
-3. **Fetch dispatcher** – scheduler/cron enqueues pending queries in small batches, marking them `queued`.
-4. **Fetcher workers** – dedicated process (loop or queue worker) executes API calls, updates each `report_query` to `succeeded` with response JSON or `failed` + increments `attempts`. Retries move status to `retrying`.
-5. **Aggregation** – once all queries succeed (or hit retry budget), aggregate counts into `report_results`, set `report_run.status` to `completed` or `failed`.
-6. **Logging** – any API exception persists a row in `api_error_logs` for later inspection.
+1. Użytkownik lub API zapisuje payload wejściowy, a system tworzy `report_run` ze statusem `pending`.
+2. Proces generowania buduje pełną siatkę parametrów, zapisuje rekordy w `report_queries` i ustawia status `queued`.
+3. Dispatcher lub cron pobiera oczekujące zapytania w małych partiach i oznacza je jako gotowe do wykonania.
+4. Worker wykonuje zapytania do API, zapisuje odpowiedzi albo błędy i zarządza retry.
+5. Gdy wszystkie zapytania zakończą się sukcesem lub wyczerpią limit prób, system agreguje dane do `report_results`.
+6. Każdy wyjątek lub błąd integracji trafia również do `api_error_logs`.
 
-### Status Signals
+## Sygnały statusów
 
-- **Input (`report_runs.status`)**: `pending` → `building_queries` → `queued` → `fetching` → `aggregating` → `completed` / `failed`.
-- **Query (`report_queries.status`)**: `pending` → `queued` → `in_progress` → `succeeded` / `retrying` → `failed` (after max attempts) / `skipped` (manually ignored).
-- **Result (`report_results.status`)**: `pending` → `calculating` → `ready` / `failed`.
+### Status uruchomienia raportu (`report_runs.status`)
 
-### Operational Notes
+- `pending` -> `building_queries` -> `queued` -> `fetching` -> `aggregating` -> `completed` / `failed`
 
-- Cron or worker loop should cap concurrent fetches to respect API rate limits; use `limit`/`page` to handle pagination when `meta.count > limit`.
-- `request_params`/`response_payload` fields stay JSON for auditability and easy replay.
-- Aggregate job should double-check `meta.count` vs pagination to ensure completeness.
-- Error logger can later be replaced by observability pipeline without schema changes.
+### Status pojedynczego zapytania (`report_queries.status`)
 
-## Runtime Components
+- `pending` -> `queued` -> `in_progress` -> `succeeded`
+- `pending` -> `queued` -> `in_progress` -> `retrying` -> `failed`
+- `pending` -> `queued` -> `skipped`
 
-- CLI helpers (all in `/app/bin/console`):
-  - `app:reports:create-run <code> <payload>` – registers a new entry in `reports`/`report_runs`.
-  - `app:reports:generate-queries <runId>` – ekspanduje run do rekordów `report_queries` i pokazuje pasek postępu z bieżącym regionem/oknem.
-  - `app:reports:process-queue [--limit=N] [--ignore-attempts]` – konsumuje zapytania, pokazuje kolorowe statusy i pasek postępu, zapisuje wyniki/błędy, opcjonalnie ignoruje limit prób.
-  - `app:reports:aggregate-run <runId>` – agreguje udane zapytania z wizualnym podglądem postępu.
-  - `app:reports:vehicles:queue <runId>` – ekstrahuje identyfikatory pojazdów z wyników zapytań danego runu i dodaje je do kolejki `report_vehicles`.
-  - `app:reports:vehicles:process-queue [--limit=N] [--ignore-attempts]` – pobiera dane pojedynczych pojazdów z CEPiK, przetwarza kolejkę z opóźnieniem 5 s dla zadań do ponowienia i respektuje limity API.
-- Services under `App\Service\Report\*` implement the workflow for injection into other entry points (e.g. HTTP controllers, workers).
+### Status wyniku (`report_results.status`)
+
+- `pending` -> `calculating` -> `ready` / `failed`
+
+## Uwagi operacyjne
+
+- Worker powinien ograniczać równoległość, żeby nie przekroczyć limitów API CEPiK.
+- Należy obsłużyć paginację przez `limit` i `page`, jeśli `meta.count > limit`.
+- Pola `request_params` i `response_payload` warto przechowywać w JSON dla audytu i łatwego replayu.
+- Agregacja powinna weryfikować spójność `meta.count` i pełności paginacji.
+- Log błędów można później zastąpić zewnętrznym monitoringiem bez przebudowy modelu domenowego.
+
+## Elementy runtime
+
+Najważniejsze komendy CLI dostępne w `app/bin/console`:
+
+- `app:reports:create-run <code> <payload>` - tworzy rekordy w `reports` i `report_runs`
+- `app:reports:generate-queries <runId>` - rozwija payload do listy `report_queries`
+- `app:reports:process-queue [--limit=N] [--ignore-attempts]` - przetwarza kolejkę zapytań, zapisuje odpowiedzi i błędy
+- `app:reports:aggregate-run <runId>` - agreguje udane odpowiedzi do wyniku końcowego
+- `app:reports:vehicles:queue <runId>` - wyciąga identyfikatory pojazdów i odkłada je do kolejki szczegółów
+- `app:reports:vehicles:process-queue [--limit=N] [--ignore-attempts]` - pobiera szczegóły pojedynczych pojazdów z CEPiK
+- `app:reports:vehicles:export-excel <runId>` - eksportuje dane pojazdów do Excela
+
+## Wniosek projektowy
+
+Ten model nadaje się do dalszego rozwijania jako aplikacja raportowa, panel administracyjny albo usługa backendowa pod kolejny system. Najmocniejsze strony projektu to rozbicie procesu na etapy, utrwalanie stanu w bazie i możliwość wznawiania pracy po błędach integracji.

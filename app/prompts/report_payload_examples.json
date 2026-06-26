@@ -1,0 +1,26 @@
+[
+  {
+    "role": "user",
+    "content": "Znajdź wszystkie zarejestrowane auta Toyota Celica z lat 1990-1993 w całej Polsce."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"needs_clarification\": false,\n  \"clarifying_questions\": [],\n  \"report_payload\": {\n    \"regions\": [\"02\", \"04\", \"06\", \"08\", \"10\", \"12\", \"14\", \"16\", \"18\", \"20\", \"22\", \"24\", \"26\", \"28\", \"30\", \"32\", \"XX\"],\n    \"years\": [1990, 1991, 1992, 1993],\n    \"date_windows\": [\n      {\"from\": \"19900101\", \"to\": \"19911231\"},\n      {\"from\": \"19920101\", \"to\": \"19931231\"},\n      {\"from\": \"19940101\", \"to\": \"19951231\"},\n      {\"from\": \"19960101\", \"to\": \"19971231\"},\n      {\"from\": \"19980101\", \"to\": \"19991231\"},\n      {\"from\": \"20000101\", \"to\": \"20011231\"},\n      {\"from\": \"20020101\", \"to\": \"20031231\"},\n      {\"from\": \"20040101\", \"to\": \"20051231\"},\n      {\"from\": \"20060101\", \"to\": \"20071231\"},\n      {\"from\": \"20080101\", \"to\": \"20091231\"},\n      {\"from\": \"20100101\", \"to\": \"20111231\"},\n      {\"from\": \"20120101\", \"to\": \"20131231\"},\n      {\"from\": \"20140101\", \"to\": \"20151231\"},\n      {\"from\": \"20160101\", \"to\": \"20171231\"},\n      {\"from\": \"20180101\", \"to\": \"20191231\"},\n      {\"from\": \"20200101\", \"to\": \"20211231\"},\n      {\"from\": \"20220101\", \"to\": \"20231231\"},\n      {\"from\": \"20240101\"}\n    ],\n    \"filters\": {\n      \"marka\": \"TOYOTA\",\n      \"model\": \"CELICA\"\n    },\n    \"options\": {\n      \"tylko-zarejestrowane\": true,\n      \"limit\": 500,\n      \"page\": 1,\n      \"typ-daty\": \"1\"\n    }\n  }\n}"
+  },
+  {
+    "role": "user",
+    "content": "Ile jest BMW X5 w województwie łódzkim?"
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"needs_clarification\": true,\n  \"clarifying_questions\": [\n    \"Podaj proszę lata produkcji BMW X5, które chcesz uwzględnić w raporcie.\",\n    \"Czy chcesz analizować pierwszą rejestrację (typ-daty=1), czy ostatnią (typ-daty=2)?\"\n  ],\n  \"report_payload\": null\n}"
+  },
+  {
+    "role": "user",
+    "content": "Interesują mnie elektryczne Audi e-tron z lat 2019-2024 tylko z Mazowsza, filtruj po rodzaju paliwa na elektryczne."
+  },
+  {
+    "role": "assistant",
+    "content": "{\n  \"needs_clarification\": false,\n  \"clarifying_questions\": [],\n  \"report_payload\": {\n    \"regions\": [\"14\"],\n    \"years\": [2019, 2020, 2021, 2022, 2023, 2024],\n    \"date_windows\": [\n      {\"from\": \"20190101\", \"to\": \"20201231\"},\n      {\"from\": \"20210101\", \"to\": \"20221231\"},\n      {\"from\": \"20230101\", \"to\": \"20241231\"}\n    ],\n    \"filters\": {\n      \"marka\": \"AUDI\",\n      \"model\": \"E-TRON\",\n      \"rodzaj-paliwa\": \"ELEKTRYCZNE\"\n    },\n    \"options\": {\n      \"tylko-zarejestrowane\": true,\n      \"limit\": 500,\n      \"page\": 1,\n      \"typ-daty\": \"1\"\n    }\n  }\n}"
+  }
+]
